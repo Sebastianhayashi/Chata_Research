@@ -1,0 +1,13 @@
+➜  logs git:(main) ✗ cat results.csv
+file,lines,tool,run_index,real_time_sec,user_time_sec,sys_time_sec,perf_instructions,perf_cycles,cache_miss,branch_miss
+gen_s/big_1x.s,58,libchata,ALL,0.84,0.61,0.22,2829945633,1634917642,370993,2000332
+gen_s/big_1x.s,58,as+objcopy,ALL,0.33,0.29,0.03,1927128190,834279853,105499,2268450
+gen_s/big_4x.s,58,libchata,ALL,2.26,2.13,0.12,11215866645,6310535922,593191,7089173
+gen_s/big_4x.s,58,as+objcopy,ALL,1.22,1.10,0.10,7617549964,3262358544,850423,7634122
+gen_s/big_8x.s,58,libchata,ALL,4.42,4.24,0.16,22397049732,12593851843,1107690,14129741
+gen_s/big_8x.s,58,as+objcopy,ALL,2.35,2.18,0.15,15192982298,6524899882,3753344,15257262
+gen_s/big_16x.s,58,libchata,ALL,8.70,8.42,0.25,44759397019,25088115774,2943852,27797722
+gen_s/big_16x.s,58,as+objcopy,ALL,4.71,4.42,0.27,30370147567,13196398117,19527862,29876346
+gen_s/big_32x.s,58,libchata,ALL,17.20,16.85,0.29,89484063448,50112964469,6629565,55044775
+gen_s/big_32x.s,58,as+objcopy,ALL,9.62,9.06,0.52,60694543150,27009237547,63094056,58509572
+➜  logs git:(main) ✗
