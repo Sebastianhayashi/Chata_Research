@@ -47,7 +47,11 @@ cargo install just
 just build
 ```
 
-### 2.2 使用库生成机器码
+### 2.2 生成机器码
+
+```
+chata <file>
+```
 
 ## 3 测试
 
