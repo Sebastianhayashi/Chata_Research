@@ -2,24 +2,21 @@
 set -e
 
 ###############################################################################
-# comprehensive_perf_test_revyos.sh
+# comprehensive_fixed_test.sh
 #
-# 适用于 RevyOS 或其他 Debian/Ubuntu 系统的脚本，完成以下功能：
-# 1) 安装依赖（perf, cargo, just, cmake, g++ 等），
-# 2) 编译并安装 Chatassembler (libchata)，
-# 3) 生成多种规模的 RISC-V 汇编 (.s 文件)，
-# 4) 进行多次性能测试 (RUNS=10, SCALES=1,4,8,16,32,64)，
-# 5) 收集 perf 事件 (instructions, cycles, cache-misses, branch-misses)，
-# 6) 输出结果到 logs/results.csv，目录结构保持 generated_s/, logs/, out_bin/。
+# 针对“行数统计不准确”问题进行了改进：
+# 1) 检查 16kinstrs.s 是否确实有 16k 行以上；
+# 2) 使用 cat "$SFILE" | wc -l 来统计行数；
+# 3) 其余逻辑与原脚本类似：在 Debian/Ubuntu/RevyOS 上装依赖 -> 编译 Chatassembler ->
+#    生成多倍 .s -> 多次测试 (RUNS=10, SCALES=1..64) -> 用 perf 收集 -> 结果写 logs/results.csv
 ###############################################################################
 
-echo "=== [A] 安装/检测依赖 (apt-get) ==="
+echo "=== [A] 检测并安装依赖 (apt-get) ==="
 
 # perf
 if ! command -v perf &>/dev/null; then
   echo "[perf 不存在] 尝试 apt-get 安装 perf (或 linux-perf, linux-tools-*)..."
   sudo apt-get update
-  # 可能不同版本命名不一，先尝试安装 linux-perf
   sudo apt-get install -y linux-perf || {
     echo "在 Debian/Ubuntu 环境中可能需安装 'linux-tools-common' 或 'linux-perf-<内核版本>' 等，请根据报错调整。"
     exit 1
@@ -36,7 +33,7 @@ if ! command -v cargo &>/dev/null; then
   }
 fi
 
-# just (若在仓库无，可用 cargo install)
+# just
 if ! command -v just &>/dev/null; then
   echo "[Just 不存在] 使用 cargo 安装 just..."
   cargo install just
@@ -72,6 +69,21 @@ echo "=== [D] 回到 testfiles 目录 ==="
 cd testfiles
 
 ###############################################################################
+# 确保 16kinstrs.s 真的有足够行数 (至少 16000 行)
+###############################################################################
+BASE_S="16kinstrs.s"
+MIN_LINES=16000  # 期望至少 16k 行
+actual_lines=$(cat "$BASE_S" | wc -l || echo 0)
+
+if [ "$actual_lines" -lt "$MIN_LINES" ]; then
+  echo "错误：$BASE_S 实际只有 $actual_lines 行，低于 $MIN_LINES 行，无法做大规模测试。"
+  echo "请检查是否使用了正确的 16kinstrs.s (应该有至少 16k 行)."
+  exit 1
+else
+  echo "$BASE_S 文件行数=$actual_lines, 符合预期."
+fi
+
+###############################################################################
 # 创建目录：generated_s/, logs/, out_bin/
 ###############################################################################
 GEN_S_DIR="generated_s"
@@ -83,17 +95,16 @@ mkdir -p "$GEN_S_DIR" "$LOG_DIR" "$BIN_DIR"
 ###############################################################################
 # (E) 生成多种规模的 .s 文件
 ###############################################################################
-echo "=== [E] 生成大规模 .s 文件 ==="
+echo "=== [E] 生成多种规模 .s 文件 ==="
 
 SCALES=(1 4 8 16 32 64)
-BASE_S="16kinstrs.s"
 
 rm -f "$GEN_S_DIR"/big_*.s
 
 for scale in "${SCALES[@]}"; do
   OUTFILE="$GEN_S_DIR/big_${scale}x.s"
   echo "生成 $OUTFILE (scale=${scale})..."
-  cat /dev/null > "$OUTFILE"
+  > "$OUTFILE"  # 清空或创建
   for (( i=0; i<scale; i++ )); do
     cat "$BASE_S" >> "$OUTFILE"
   done
@@ -136,6 +147,7 @@ int main(int argc, char** argv) {
     auto machine_code = libchata_assemble(code);
     auto end = std::chrono::high_resolution_clock::now();
 
+    // 写出到 bin/xxx.chata.bin
     size_t pos = input_file.find_last_of('/');
     std::string pureName = (pos == std::string::npos) ? input_file : input_file.substr(pos+1);
     std::string out_bin = out_dir + "/" + pureName + ".chata.bin";
@@ -170,9 +182,13 @@ PERF_EVENTS="instructions,cycles,cache-misses,branch-misses"
 
 for scale in "${SCALES[@]}"; do
   SFILE="$GEN_S_DIR/big_${scale}x.s"
-  LINES=$(wc -l < "$SFILE" | awk '{print $1}')
 
+  # 改用 cat "$SFILE" | wc -l 来统计行数
+  LINES=$(cat "$SFILE" | wc -l)
+
+  #-----------------------------
   # 1) libchata
+  #-----------------------------
   for ((i=1; i<=RUNS; i++)); do
     echo "---- [libchata] $SFILE, run=$i ----"
     PERF_LOG="$LOG_DIR/perf_libchata_${scale}x_run${i}.log"
@@ -196,13 +212,16 @@ for scale in "${SCALES[@]}"; do
     BINFILE="$BIN_DIR/${PURE_NAME}.chata.bin"
     SIZE=0
     if [ -f "$BINFILE" ]; then
-      SIZE=$(stat -c %s "$BINFILE")
+      # 注意: 在某些系统, stat用法可能不同
+      SIZE=$(stat -c %s "$BINFILE" 2>/dev/null || stat -f %z "$BINFILE")
     fi
 
     echo "${SFILE},${LINES},libchata,${i},${REAL_T},${USER_T},${SYS_T},${INS},${CYC},${CMISS},${BMISS},${SIZE}" >> "$OUT_CSV"
   done
 
+  #-----------------------------
   # 2) as + objcopy
+  #-----------------------------
   for ((i=1; i<=RUNS; i++)); do
     echo "---- [as+objcopy] $SFILE, run=$i ----"
     PERF_LOG="$LOG_DIR/perf_as_${scale}x_run${i}.log"
@@ -225,7 +244,7 @@ for scale in "${SCALES[@]}"; do
     BINFILE="$BIN_DIR/big_${scale}x.s.as.bin"
     SIZE=0
     if [ -f "$BINFILE" ]; then
-      SIZE=$(stat -c %s "$BINFILE")
+      SIZE=$(stat -c %s "$BINFILE" 2>/dev/null || stat -f %z "$BINFILE")
     fi
 
     echo "${SFILE},${LINES},as+objcopy,${i},${REAL_T},${USER_T},${SYS_T},${INS},${CYC},${CMISS},${BMISS},${SIZE}" >> "$OUT_CSV"
