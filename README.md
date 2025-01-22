@@ -106,11 +106,70 @@ just build
 | gen_s/big_32x.s     | 58        | libchata      | 17.20              | 16.85             | 0.29             | 89484063448        | 50112964469      | 6629565          | 55044775          |
 | gen_s/big_32x.s     | 58        | as+objcopy    | 9.62               | 9.06              | 0.52             | 60694543150        | 27009237547      | 63094056         | 58509572          |
 
-### 3.4 测试结果分析
+### 3.4 测试结果分析（10 轮测试）
 
 在同等规模下，as+objcopy 总体用时约为 libchata 的 50% 左右（1.8~2.5× 差距），随着规模增大从 1x 到 32x，这个差距一直保持。
 
 libchata consistently 更多（指令 ~1.5×, 周期 ~2×）。随着规模增大，as+objcopy 在 cache/branch misses 值更高，但显然并未影响其整体效率，因为它指令数更低 + 其他流水线优势。
+
+1. 耗时对比 (real_time_sec)
+
+| 文件名       | 工具          | 耗时 (秒) | 比较   |
+|--------------|-----------------|------------|-------|
+| big_1x.s     | libchata        | 0.84       |       |
+|              | as+objcopy      | 0.33       | 2.5&times;  |
+| big_4x.s     | libchata        | 2.26       |       |
+|              | as+objcopy      | 1.22       | 1.85&times; |
+| big_8x.s     | libchata        | 4.42       |       |
+|              | as+objcopy      | 2.35       | 1.88&times; |
+| big_16x.s    | libchata        | 8.70       |       |
+|              | as+objcopy      | 4.71       | 1.85&times; |
+| big_32x.s    | libchata        | 17.20      |       |
+|              | as+objcopy      | 9.62       | 1.79&times; |
+
+**总结**：在所有测试规模下，**as+objcopy** 总耗时为 **libchata** 的 **1/2~1/2.5**，即其速度约为 **1.8~2.5 倍** 的优势。
+
+---
+
+2. CPU 指令和周期数 (perf_instructions / perf_cycles)
+
+| 文件名       | 工具          | 指令数 (`perf_instructions`)    | 周期数 (`perf_cycles`)      | 比较           |
+|--------------|-----------------|----------------------------------|-----------------------------|----------------|
+| big_1x.s     | libchata        | 2.83&times;10^9                        | 1.63&times;10^9                   |                |
+|              | as+objcopy      | 1.93&times;10^9                        | 8.34&times;10^8                   | 1.47&times;(指令数)   |
+| big_4x.s     | libchata        | 1.12&times;10^10                       | 6.31&times;10^9                   |                |
+|              | as+objcopy      | 7.62&times;10^9                        | 3.26&times;10^9                   | 1.47&times;           |
+| big_8x.s     | libchata        | 2.24&times;10^10                       | 1.26&times;10^10                  |                |
+|              | as+objcopy      | 1.52&times;10^10                       | 6.52&times;10^9                   | 1.47&times;           |
+| big_16x.s    | libchata        | 4.48&times;10^10                       | 2.51&times;10^10                  |                |
+|              | as+objcopy      | 3.04&times;10^10                       | 1.32&times;10^10                  | 1.47&times;           |
+| big_32x.s    | libchata        | 8.95&times;10^10                       | 5.01&times;10^10                  |                |
+|              | as+objcopy      | 6.07&times;10^10                       | 2.70&times;10^10                  | 1.47&times;           |
+
+**总结**：**libchata** consistently 执行**更多指令** (~1.47&times;) 和占用**更多 CPU 周期** (~1.82&times;)；因此也需要更长的真实时间。
+
+---
+
+1. 缓存缺失 (Cache Misses) 和 分支缺失 (Branch Misses)
+
+| 文件名       | 工具          | 缓存缺失 (`perf_cachemiss`)    | 分支缺失 (`perf_branchmiss`)        | 比较               |
+|--------------|-----------------|-------------------------------------------------|-------------------------------------------------|----------------------------|
+| big_1x.s     | libchata        | 370,993                                         | 2,000,332                                       |  |
+|              | as+objcopy      | 105,499                                         | 2,268,450                                       |  |
+| big_4x.s     | libchata        | 593,191                                         | 7,089,173                                       |                |
+|              | as+objcopy      | 850,423                                         | 7,634,122                                       |  |
+| big_8x.s     | libchata        | 1,107,690                                       | 14,129,741                                      |                |
+|              | as+objcopy      | 3,753,344                                       | 15,257,262                                      | 3.4&times; (缓存)    |
+| big_16x.s    | libchata        | 2,943,852                                       | 27,797,722                                      |                |
+|              | as+objcopy      | 19,527,862                                      | 29,876,346                                      | 6.6&times; (分支)    |
+| big_32x.s    | libchata        | 6,629,565                                       | 55,044,775                                      |                |
+|              | as+objcopy      | 63,094,056                                      | 58,509,572                                      | 9.5&times;(缓存/ 分支)|
+
+**现象**：随着规模增大（`8x`, `16x`, `32x`），**as+objcopy** 的缓存缺失（cache miss）和分支缺失（branch miss）明显增高，但是**指令数和周期较少**，因此不妨碍它以更小的总耗时完成任务。
+
+**总结**：尽管 **as+objcopy** 产生了更多的 cache miss / branch miss，但它能够更高效地执行，减少了不必要的操作，从而保持了优越的性能。
+
+
 
 ## 附录
 
