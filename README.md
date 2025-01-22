@@ -53,15 +53,20 @@ just build
 
 ### 3.1 环境说明
 
-- 系统：openEuler 24.03 LTS x86_64
-- CPU：
+- 系统：openEuler 24.03 LTS x86_64（虚拟机）
+- CPU：Intel(R) Xeon(R) Gold 5215L CPU @ 2.50GHz
+- cmake：3.27.9
+- libchata: 1
 - 工具链：
+  - GNU assembler (GNU Binutils) 2.43.1
+  - GNU objcopy (GNU Binutils) 2.43.1
+- perf：6.6.0-73.0.0.65.oe2403.x86_64
 - C++ 编译器：GCC 12.3.1
-- 测试脚本：complex_perf_test.sh（我们在测试中指定了 SCALES=1,4,8,16,32,64 并重复多次）
+- 测试脚本：comprehensive_test.sh（我们在测试中指定了 SCALES=1,4,8,16,32 并重复多次）
 
 ### 3.2 测试介绍
 
-首先我们使用官方仓库中的 testfile 下的 16kinstrs.s 作为基础文件，拼接成 big_1x.s ~ big_32x.s 来模拟不同规模（从 16k 行到 32 倍 ~ 1M 行不等）。
+首先我们使用官方仓库中的 testfile 下的 16kinstrs.s 作为基础文件，拼接成 big_1x.s ~ big_32x.s 来模拟不同规模（从 16k 行到 32 倍 ~ 512k 行不等）。
 
 接着，对每个规模的 `.s` 文件，各执行 libchata 与 as+objcopy 各 10 次；记录 “real/user/sys” 时间（用 /usr/bin/time -p）以及 perf stat 收集 “instructions, cycles, cache-misses, branch-misses”。
 
