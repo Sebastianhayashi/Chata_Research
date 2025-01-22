@@ -114,5 +114,5 @@ libchata consistently 更多（指令 ~1.5×, 周期 ~2×）。随着规模增�
 
 ## 附录
 
-[5 runs CSV](./results_5_runs.csv)
-[10 runs CSV](./results_10_runs.csv)
+[5 runs CSV](./csvs/results_5_runs.csv)
+[10 runs CSV](./csvs/results_10_runs.csv)
